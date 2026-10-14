@@ -1,0 +1,113 @@
+---
+import type { Lectura } from '../types/api';
+
+interface Props {
+  lecturas: Lectura[];
+}
+
+const { lecturas = [] } = Astro.props;
+
+// Sort oldest to newest for chart display
+const sorted = [...lecturas].reverse();
+
+const temps = sorted.map(l => l.temperatura);
+const hums = sorted.map(l => l.humedad);
+
+const maxTemp = temps.length ? Math.max(...temps, 35) : 35;
+const minTemp = temps.length ? Math.min(...temps, 15) : 15;
+const tempRange = Math.max(maxTemp - minTemp, 1);
+
+const maxHum = 100;
+const minHum = 0;
+---
+
+<div class="rounded-2xl bg-slate-900/70 border border-slate-800 p-6 backdrop-blur-md shadow-xl shadow-black/20">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h3 class="text-base font-bold text-white flex items-center gap-2">
+        <svg class="w-5 h-5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+        </svg>
+        Tendencia Reciente
+      </h3>
+      <p class="text-xs text-slate-400 mt-0.5">Evolución de temperatura y humedad en las últimas lecturas</p>
+    </div>
+    
+    <div class="flex items-center gap-4 text-xs font-medium">
+      <div class="flex items-center gap-1.5">
+        <span class="w-2.5 h-2.5 rounded-full bg-orange-400"></span>
+        <span class="text-slate-300">Temp (°C)</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
+        <span class="text-slate-300">Humedad (%)</span>
+      </div>
+    </div>
+  </div>
+
+  {sorted.length === 0 ? (
+    <div class="h-44 flex items-center justify-center text-slate-500 text-sm">
+      Sin datos para graficar
+    </div>
+  ) : (
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+      <!-- Temperature Bars -->
+      <div class="bg-slate-950/40 border border-slate-800/60 rounded-xl p-4">
+        <div class="text-xs font-semibold uppercase text-orange-400 mb-3 flex justify-between">
+          <span>Temperatura</span>
+          <span class="text-slate-400 font-mono text-[11px]">{temps[temps.length - 1]}°C actual</span>
+        </div>
+        <div class="flex items-end justify-between gap-2 h-36 pt-4 pb-2">
+          {sorted.map((item) => {
+            const heightPct = Math.max(15, Math.min(100, ((item.temperatura - minTemp) / tempRange) * 85 + 15));
+            return (
+              <div class="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
+                <span class="text-[10px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  {item.temperatura}°
+                </span>
+                <div class="w-full max-w-[28px] bg-slate-800/80 rounded-t-lg overflow-hidden flex items-end">
+                  <div
+                    class="w-full bg-gradient-to-t from-amber-500 to-orange-400 rounded-t-lg transition-all duration-500 group-hover:brightness-125"
+                    style={`height: ${heightPct}%`}
+                  ></div>
+                </div>
+                <span class="text-[9px] font-mono text-slate-500 truncate w-full text-center">
+                  {item.fecha_hora.split(' ')[1]?.slice(0, 5) || ''}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <!-- Humidity Bars -->
+      <div class="bg-slate-950/40 border border-slate-800/60 rounded-xl p-4">
+        <div class="text-xs font-semibold uppercase text-cyan-400 mb-3 flex justify-between">
+          <span>Humedad Relativa</span>
+          <span class="text-slate-400 font-mono text-[11px]">{hums[hums.length - 1]}% actual</span>
+        </div>
+        <div class="flex items-end justify-between gap-2 h-36 pt-4 pb-2">
+          {sorted.map((item) => {
+            const heightPct = Math.max(12, Math.min(100, item.humedad));
+            return (
+              <div class="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
+                <span class="text-[10px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  {item.humedad}%
+                </span>
+                <div class="w-full max-w-[28px] bg-slate-800/80 rounded-t-lg overflow-hidden flex items-end">
+                  <div
+                    class="w-full bg-gradient-to-t from-blue-500 to-cyan-400 rounded-t-lg transition-all duration-500 group-hover:brightness-125"
+                    style={`height: ${heightPct}%`}
+                  ></div>
+                </div>
+                <span class="text-[9px] font-mono text-slate-500 truncate w-full text-center">
+                  {item.fecha_hora.split(' ')[1]?.slice(0, 5) || ''}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  )}
+</div>
