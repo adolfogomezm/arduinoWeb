@@ -21,7 +21,7 @@ const { lecturas = [] } = Astro.props;
       </h2>
       <p class="text-xs text-slate-400 mt-0.5">Registro cronológico de telemetría del ventilador y sensores</p>
     </div>
-    <div class="text-xs text-slate-400 bg-slate-800/60 px-3 py-1.5 rounded-lg border border-slate-700/50 self-start sm:self-auto font-mono">
+    <div id="table-total-count" class="text-xs text-slate-400 bg-slate-800/60 px-3 py-1.5 rounded-lg border border-slate-700/50 self-start sm:self-auto font-mono">
       {lecturas.length} {lecturas.length === 1 ? 'registro' : 'registros'}
     </div>
   </div>
@@ -37,9 +37,9 @@ const { lecturas = [] } = Astro.props;
           <th class="py-3.5 px-4 sm:px-6 text-right">Timestamp</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-slate-800/60 text-sm">
+      <tbody id="history-table-body" class="divide-y divide-slate-800/60 text-sm">
         {lecturas.length === 0 ? (
-          <tr>
+          <tr id="history-empty-row">
             <td colspan="5" class="py-12 text-center text-slate-500">
               No hay lecturas disponibles en este momento.
             </td>

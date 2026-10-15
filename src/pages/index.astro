@@ -32,6 +32,7 @@ try {
 
 const lecturas: Lectura[] = data?.lecturas || [];
 const latestReading = lecturas.length > 0 ? lecturas[0] : null;
+const initialTimestamp = latestReading?.timestamp || 0;
 
 let stats: Estadisticas | null = data?.estadisticas || null;
 if (!stats && lecturas.length > 0) {
@@ -47,18 +48,37 @@ if (!stats && lecturas.length > 0) {
   };
 }
 
-const fanSpeed = (latestReading?.velocidad_ventilador || 'baja').toLowerCase();
+const fanSpeed = (latestReading?.velocidad_ventilador || 'baja').toLowerCase().trim();
 
-const speedConfig: Record<string, { label: string; badge: string; spin: string }> = {
-  alta: { label: 'ALTA', badge: 'bg-rose-500/20 text-rose-400 border-rose-500/30', spin: 'animate-spin' },
-  media: { label: 'MEDIA', badge: 'bg-blue-500/20 text-blue-400 border-blue-500/30', spin: '[animation-duration:2.5s] animate-spin' },
-  baja: { label: 'BAJA', badge: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', spin: '[animation-duration:4.5s] animate-spin' },
+const speedConfig: Record<string, { label: string; badge: string; spin: string; duration: string }> = {
+  alta: { 
+    label: 'ALTA', 
+    badge: 'bg-rose-500/20 text-rose-400 border-rose-500/30', 
+    spin: 'animate-spin-fast',
+    duration: '0.6s'
+  },
+  media: { 
+    label: 'MEDIA', 
+    badge: 'bg-blue-500/20 text-blue-400 border-blue-500/30', 
+    spin: 'animate-spin-medium',
+    duration: '2.0s'
+  },
+  baja: { 
+    label: 'BAJA', 
+    badge: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', 
+    spin: 'animate-spin-slow',
+    duration: '4.5s'
+  },
 };
 const currentConfig = speedConfig[fanSpeed] || speedConfig.baja;
 ---
 
 <Layout title="Control de Climatización Inteligente">
-  <main class="min-h-screen bg-[#0b0f19] text-slate-100 pb-16 selection:bg-cyan-500 selection:text-black">
+  <main 
+    id="dashboard-root" 
+    data-initial-timestamp={initialTimestamp}
+    class="min-h-screen bg-[#0b0f19] text-slate-100 pb-16 selection:bg-cyan-500 selection:text-black"
+  >
     
     <!-- Barra Superior -->
     <header class="sticky top-0 z-40 bg-[#0b0f19]/80 backdrop-blur-md border-b border-slate-800/60 px-4 sm:px-8 py-3.5 flex items-center justify-between">
@@ -71,8 +91,8 @@ const currentConfig = speedConfig[fanSpeed] || speedConfig.baja;
         <div>
           <h1 class="text-sm sm:text-base font-bold text-white tracking-wide">Climatización IoT</h1>
           <div class="flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span class="text-[11px] font-medium text-slate-400">En línea</span>
+            <span id="status-indicator" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span id="status-text" class="text-[11px] font-medium text-slate-400">En línea (cada 15s)</span>
           </div>
         </div>
       </div>
@@ -81,6 +101,7 @@ const currentConfig = speedConfig[fanSpeed] || speedConfig.baja;
         <button 
           id="btn-sync" 
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/50 text-xs font-medium text-slate-200 transition active:scale-95"
+          title="Actualizar ahora"
         >
           <svg id="sync-icon" class="w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -93,9 +114,9 @@ const currentConfig = speedConfig[fanSpeed] || speedConfig.baja;
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
 
       {error && (
-        <div class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
+        <div id="error-banner" class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
           <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-          <span>{error}</span>
+          <span id="error-message">{error}</span>
         </div>
       )}
 
@@ -116,7 +137,13 @@ const currentConfig = speedConfig[fanSpeed] || speedConfig.baja;
 
           <div class="flex flex-col sm:flex-row items-center justify-center gap-8 py-4">
             <div class="w-36 h-36 rounded-full border border-slate-800 flex items-center justify-center bg-slate-950/50 shadow-inner">
-              <svg id="fan-icon" class={`w-20 h-20 text-cyan-400 ${currentConfig.spin}`} fill="currentColor" viewBox="0 0 24 24">
+              <svg 
+                id="fan-icon" 
+                class={`w-20 h-20 text-cyan-400 animate-spin ${currentConfig.spin}`} 
+                style={`animation-duration: ${currentConfig.duration};`}
+                fill="currentColor" 
+                viewBox="0 0 24 24"
+              >
                 <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14.93a3 3 0 0 1-2 0V13a1 1 0 0 1 2 0v3.93zM8.54 15.6a3 3 0 0 1-1.42-1.41L10 12a1 1 0 0 1 .71 1.29zm0-7.2L10.71 10.7A1 1 0 0 1 10 12L7.12 9.81a3 3 0 0 1 1.42-1.41zM13 7.07V11a1 1 0 0 1-2 0V7.07a3 3 0 0 1 2 0zm2.46 1.33 1.42 1.41L14 12a1 1 0 0 1-.71-1.29zm0 7.2-2.17-2.29A1 1 0 0 1 14 12l2.88 2.19a3 3 0 0 1-1.42 1.41z" />
               </svg>
             </div>
@@ -214,70 +241,48 @@ const currentConfig = speedConfig[fanSpeed] || speedConfig.baja;
   </main>
 
   <script>
-    const API_URL = 'https://arduino-iot-ventilador-api.onrender.com/historial';
+    const POLL_INTERVAL_MS = 15000; // Consulta cada 15 segundos
+    const rootEl = document.getElementById('dashboard-root');
+    const initialTimestamp = Number(rootEl?.dataset.initialTimestamp || 0);
+
     const btnSync = document.getElementById('btn-sync');
     const syncIcon = document.getElementById('sync-icon');
 
-    async function actualizarDatos() {
-      if (syncIcon) syncIcon.classList.add('rotate-180');
+    // Botón manual de actualizar: recarga la página inmediatamente
+    if (btnSync) {
+      btnSync.addEventListener('click', () => {
+        if (syncIcon) syncIcon.classList.add('rotate-180');
+        window.location.reload();
+      });
+    }
+
+    // Monitoreo en segundo plano cada 15s:
+    // Consulta si hay lecturas nuevas y solo reinicia la página si llegó un dato nuevo
+    async function verificarNuevosDatos() {
       try {
-        const res = await fetch(API_URL);
+        const res = await fetch('/api/historial', {
+          headers: { 'Accept': 'application/json' },
+          cache: 'no-store',
+        });
         if (!res.ok) return;
-        const json = await res.json();
-        
-        if (json.lecturas && json.lecturas.length > 0) {
-          const ultima = json.lecturas[0];
-          
-          const tempEl = document.getElementById('live-temp');
-          const humEl = document.getElementById('live-hum');
-          const timeEl = document.getElementById('last-sync-time');
-          const badgeEl = document.getElementById('fan-badge');
-          const fanIcon = document.getElementById('fan-icon');
-          
-          if (tempEl) tempEl.innerText = Number(ultima.temperatura).toFixed(1);
-          if (humEl) humEl.innerText = Number(ultima.humedad).toFixed(0);
-          if (timeEl) timeEl.innerText = ultima.fecha_hora;
 
-          const vel = (ultima.velocidad_ventilador || 'baja').toLowerCase();
-          if (badgeEl) {
-            badgeEl.innerText = `Nivel: ${vel.toUpperCase()}`;
-            badgeEl.className = `text-xs font-bold uppercase px-3 py-1 rounded-full border ${
-              vel === 'alta' ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' :
-              vel === 'media' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
-              'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-            }`;
-          }
+        const data = await res.json();
+        if (data && data.lecturas && data.lecturas.length > 0) {
+          const ultimaLectura = data.lecturas[0];
+          const nuevoTimestamp = Number(ultimaLectura.timestamp) || 0;
 
-          if (fanIcon) {
-            fanIcon.className = `w-20 h-20 text-cyan-400 animate-spin ${
-              vel === 'alta' ? '[animation-duration:1s]' :
-              vel === 'media' ? '[animation-duration:2.5s]' :
-              '[animation-duration:4.5s]'
-            }`;
-          }
-
-          if (json.estadisticas) {
-            const tMin = document.getElementById('temp-min');
-            const tMax = document.getElementById('temp-max');
-            const hMin = document.getElementById('hum-min');
-            const hMax = document.getElementById('hum-max');
-            if (tMin) tMin.innerText = `${json.estadisticas.temperatura_min}°`;
-            if (tMax) tMax.innerText = `${json.estadisticas.temperatura_max}°`;
-            if (hMin) hMin.innerText = `${json.estadisticas.humedad_min}%`;
-            if (hMax) hMax.innerText = `${json.estadisticas.humedad_max}%`;
+          // Si el timestamp es diferente al que cargó el SSR en la página,
+          // recarga la página completa para que Astro SSR configure todo (ventilador, gráfico, tabla, etc.)
+          if (nuevoTimestamp > 0 && nuevoTimestamp !== initialTimestamp) {
+            console.log('Nuevo dato detectado desde Arduino. Recargando página...');
+            window.location.reload();
           }
         }
-      } catch (e) {
-        console.warn('Reintentando...', e);
-      } finally {
-        if (syncIcon) setTimeout(() => syncIcon.classList.remove('rotate-180'), 500);
+      } catch (err) {
+        console.warn('Error al verificar actualización:', err);
       }
     }
 
-    if (btnSync) {
-      btnSync.addEventListener('click', actualizarDatos);
-    }
-
-    setInterval(actualizarDatos, 6000);
+    setInterval(verificarNuevosDatos, POLL_INTERVAL_MS);
   </script>
 </Layout>

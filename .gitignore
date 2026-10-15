@@ -17,3 +17,8 @@ pnpm-debug.log*
 
 # macOS
 .DS_Store
+
+# IDEs and Agents
+.agents
+.gemini
+.idea
