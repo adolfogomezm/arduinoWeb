@@ -2,8 +2,6 @@
 export const prerender = false;
 
 import Layout from '../layouts/Layout.astro';
-import StatCard from '../components/StatCard.astro';
-import FanBadge from '../components/FanBadge.astro';
 import HistoryTable from '../components/HistoryTable.astro';
 import TelemetryChart from '../components/TelemetryChart.astro';
 import type { ApiResponse, Lectura, Estadisticas } from '../types/api';
@@ -12,7 +10,6 @@ const API_URL = 'https://arduino-iot-ventilador-api.onrender.com/historial';
 
 let data: ApiResponse | null = null;
 let error: string | null = null;
-const fetchTime = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
 try {
   const controller = new AbortController();
@@ -20,30 +17,22 @@ try {
 
   const res = await fetch(API_URL, {
     signal: controller.signal,
-    headers: {
-      'Accept': 'application/json',
-      'User-Agent': 'Astro-SSR-Dashboard/1.0',
-    },
+    headers: { 'Accept': 'application/json' },
   });
-
   clearTimeout(timeoutId);
 
-  if (!res.ok) {
-    throw new Error(`Error en API (${res.status} ${res.statusText})`);
+  if (res.ok) {
+    data = await res.json();
+  } else {
+    throw new Error(`Código ${res.status}`);
   }
-
-  data = await res.json();
 } catch (err: any) {
-  console.error('Error al obtener datos de la API:', err.message);
-  error = err.name === 'AbortError' 
-    ? 'El servidor de la API tardó más de 12s en responder (posible inicio en frío de Render).'
-    : `No se pudo conectar con la API: ${err.message}`;
+  error = 'El servidor está iniciando o no responde. Reintentando...';
 }
 
 const lecturas: Lectura[] = data?.lecturas || [];
-const totalLecturas = data?.total_lecturas ?? lecturas.length;
+const latestReading = lecturas.length > 0 ? lecturas[0] : null;
 
-// If stats are provided by API, use them; otherwise calculate if we have readings
 let stats: Estadisticas | null = data?.estadisticas || null;
 if (!stats && lecturas.length > 0) {
   const temps = lecturas.map(l => l.temperatura);
@@ -58,250 +47,237 @@ if (!stats && lecturas.length > 0) {
   };
 }
 
-const latestReading = lecturas.length > 0 ? lecturas[0] : null;
+const fanSpeed = (latestReading?.velocidad_ventilador || 'baja').toLowerCase();
+
+const speedConfig: Record<string, { label: string; badge: string; spin: string }> = {
+  alta: { label: 'ALTA', badge: 'bg-rose-500/20 text-rose-400 border-rose-500/30', spin: 'animate-spin' },
+  media: { label: 'MEDIA', badge: 'bg-blue-500/20 text-blue-400 border-blue-500/30', spin: '[animation-duration:2.5s] animate-spin' },
+  baja: { label: 'BAJA', badge: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', spin: '[animation-duration:4.5s] animate-spin' },
+};
+const currentConfig = speedConfig[fanSpeed] || speedConfig.baja;
 ---
 
-<Layout title="Arduino IoT - Monitor de Ventilador y Sensores">
-  <div class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+<Layout title="Control de Climatización Inteligente">
+  <main class="min-h-screen bg-[#0b0f19] text-slate-100 pb-16 selection:bg-cyan-500 selection:text-black">
     
-    <!-- Top Header -->
-    <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/80">
-      <div class="flex items-center gap-3.5">
-        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-white flex-shrink-0">
-          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="6" width="20" height="12" rx="2"></rect>
-            <circle cx="7" cy="12" r="1"></circle>
-            <circle cx="17" cy="12" r="1"></circle>
-            <path d="M12 9v6"></path>
+    <!-- Barra Superior -->
+    <header class="sticky top-0 z-40 bg-[#0b0f19]/80 backdrop-blur-md border-b border-slate-800/60 px-4 sm:px-8 py-3.5 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/25">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
         </div>
         <div>
-          <div class="flex items-center gap-2.5 flex-wrap">
-            <h1 class="text-2xl font-extrabold tracking-tight text-white">Arduino IoT Ventilador</h1>
-            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 tracking-wider uppercase font-mono">
-              SSR Activo
-            </span>
-            <span class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700/60 font-mono">
-              Ventana móvil 1h
-            </span>
+          <h1 class="text-sm sm:text-base font-bold text-white tracking-wide">Climatización IoT</h1>
+          <div class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span class="text-[11px] font-medium text-slate-400">En línea</span>
           </div>
-          <p class="text-xs text-slate-400 mt-1">Dashboard de telemetría y control ambiental</p>
         </div>
       </div>
 
-      <!-- Actions & Server Status -->
-      <div class="flex items-center flex-wrap gap-3">
-        <!-- Live status badge -->
-        <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-medium">
-          <span class={`w-2.5 h-2.5 rounded-full ${error ? 'bg-rose-500' : 'bg-emerald-400 animate-pulse'}`}></span>
-          <span class={error ? 'text-rose-400' : 'text-emerald-400'}>
-            {error ? 'Error de Conexión' : 'API Conectada'}
-          </span>
-          <span class="text-slate-700">|</span>
-          <span class="text-slate-400 font-mono text-[11px]">{fetchTime}</span>
-        </div>
-
-        <!-- Auto-refresh Toggle -->
-        <label class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 cursor-pointer select-none hover:border-slate-700 transition">
-          <input type="checkbox" id="auto-refresh-toggle" class="accent-cyan-500 rounded" />
-          <span>Auto-recarga (10s)</span>
-        </label>
-
-        <!-- Manual reload button -->
-        <button
-          onclick="window.location.reload()"
-          class="flex items-center gap-2 px-4 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-semibold text-xs transition duration-200 shadow-md shadow-cyan-500/20 active:scale-95"
+      <div class="flex items-center gap-2">
+        <button 
+          id="btn-sync" 
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/50 text-xs font-medium text-slate-200 transition active:scale-95"
         >
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+          <svg id="sync-icon" class="w-3.5 h-3.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Actualizar
+          <span class="hidden sm:inline">Actualizar</span>
         </button>
       </div>
     </header>
 
-    <!-- Error Banner -->
-    {error && (
-      <div class="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 flex items-start gap-3">
-        <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="12" y1="8" x2="12" y2="12"></line>
-          <line x1="12" y1="16" x2="12.01" y2="16"></line>
-        </svg>
-        <div class="text-xs sm:text-sm">
-          <p class="font-bold">Aviso del servidor:</p>
-          <p class="mt-0.5 text-rose-200/90">{error}</p>
-          <p class="mt-2 text-slate-400 text-xs">
-            Si la API en Render estaba en reposo (free tier), puede tardar hasta 40 segundos en reactivarse.
-          </p>
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+
+      {error && (
+        <div class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+          <span>{error}</span>
         </div>
-      </div>
-    )}
+      )}
 
-    <!-- Empty state notice when API is up but has 0 readings in the last hour -->
-    {!error && lecturas.length === 0 && (
-      <div class="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 text-center space-y-3">
-        <div class="w-12 h-12 mx-auto rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400">
-          <svg class="w-6 h-6 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
-          </svg>
-        </div>
-        <h3 class="text-base font-bold text-white">Esperando lecturas del sensor Arduino</h3>
-        <p class="text-xs text-slate-400 max-w-md mx-auto">
-          La API mantiene una <strong class="text-slate-300">ventana móvil de 1 hora</strong>. Tan pronto como el Arduino envíe un POST a <code class="text-cyan-300 bg-slate-800 px-1 py-0.5 rounded font-mono">/datos</code>, las estadísticas y gráficos aparecerán automáticamente aquí.
-        </p>
-      </div>
-    )}
-
-    <!-- Latest Reading Hero Highlight -->
-    {latestReading && (
-      <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900/90 via-slate-900/60 to-slate-950 border border-slate-800 p-6 sm:p-8 backdrop-blur-xl shadow-2xl shadow-black/40">
-        <div class="absolute -right-10 -bottom-10 w-64 h-64 bg-cyan-500/5 rounded-full blur-2xl pointer-events-none"></div>
-
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div class="space-y-2">
-            <div class="flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
-              <span class="text-xs font-bold uppercase tracking-wider text-cyan-400">Última Lectura Registrada</span>
+      <!-- PANEL PRINCIPAL -->
+      <section class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        
+        <!-- Tarjeta del Ventilador -->
+        <div class="lg:col-span-7 rounded-3xl bg-slate-900/90 border border-slate-800/80 p-6 sm:p-8 flex flex-col justify-between relative overflow-hidden shadow-2xl">
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <span class="text-xs uppercase font-semibold text-slate-400 tracking-wider">Actuador Inteligente</span>
+              <h2 class="text-xl font-bold text-white mt-0.5">Control de Ventilación</h2>
             </div>
-            <div class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-              Estado en Directo
-            </div>
-            <p class="text-xs sm:text-sm text-slate-400 font-mono flex items-center gap-2">
-              <svg class="w-4 h-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <polyline points="12 6 12 12 16 14"></polyline>
+            <span id="fan-badge" class={`text-xs font-bold uppercase px-3 py-1 rounded-full border ${currentConfig.badge}`}>
+              Nivel: {currentConfig.label}
+            </span>
+          </div>
+
+          <div class="flex flex-col sm:flex-row items-center justify-center gap-8 py-4">
+            <div class="w-36 h-36 rounded-full border border-slate-800 flex items-center justify-center bg-slate-950/50 shadow-inner">
+              <svg id="fan-icon" class={`w-20 h-20 text-cyan-400 ${currentConfig.spin}`} fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14.93a3 3 0 0 1-2 0V13a1 1 0 0 1 2 0v3.93zM8.54 15.6a3 3 0 0 1-1.42-1.41L10 12a1 1 0 0 1 .71 1.29zm0-7.2L10.71 10.7A1 1 0 0 1 10 12L7.12 9.81a3 3 0 0 1 1.42-1.41zM13 7.07V11a1 1 0 0 1-2 0V7.07a3 3 0 0 1 2 0zm2.46 1.33 1.42 1.41L14 12a1 1 0 0 1-.71-1.29zm0 7.2-2.17-2.29A1 1 0 0 1 14 12l2.88 2.19a3 3 0 0 1-1.42 1.41z" />
               </svg>
-              {latestReading.fecha_hora}
-            </p>
+            </div>
+
+            <div class="space-y-3 text-center sm:text-left">
+              <div class="text-xs text-slate-400">Algoritmo de Decisión:</div>
+              <div class="text-sm font-semibold text-slate-200 bg-slate-800/40 px-3 py-1.5 rounded-xl border border-slate-700/40 inline-block font-mono">
+                Lógica Difusa (Mamdani)
+              </div>
+              <p class="text-xs text-slate-400 max-w-xs leading-relaxed">
+                El sistema evalúa temperatura y humedad mediante reglas difusas para modular la ventilación.
+              </p>
+            </div>
           </div>
 
-          <!-- Highlight metrics cards -->
-          <div class="grid grid-cols-3 gap-3 sm:gap-6 bg-slate-950/60 border border-slate-800/80 p-4 rounded-2xl">
-            <!-- Current Temp -->
-            <div class="text-center px-2">
-              <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Temperatura</span>
-              <span class="text-2xl sm:text-3xl font-extrabold font-mono text-orange-400">
-                {latestReading.temperatura.toFixed(1)}°C
-              </span>
-            </div>
+          <div class="pt-4 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
+            <span>Última sincronización</span>
+            <span id="last-sync-time" class="font-mono text-slate-300">
+              {latestReading?.fecha_hora || '--:--:--'}
+            </span>
+          </div>
+        </div>
 
-            <!-- Current Humidity -->
-            <div class="text-center px-2 border-x border-slate-800">
-              <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Humedad</span>
-              <span class="text-2xl sm:text-3xl font-extrabold font-mono text-cyan-400">
-                {latestReading.humedad.toFixed(0)}%
-              </span>
+        <!-- Tarjetas de Sensores -->
+        <div class="lg:col-span-5 flex flex-col gap-4">
+          <!-- Temp -->
+          <div class="flex-1 rounded-3xl bg-slate-900/80 border border-slate-800/80 p-5 sm:p-6 flex items-center justify-between shadow-lg">
+            <div class="space-y-1">
+              <span class="text-xs uppercase font-semibold text-slate-400 tracking-wider">Temperatura Actual</span>
+              <div class="flex items-baseline gap-1">
+                <span id="live-temp" class="text-4xl sm:text-5xl font-black font-mono text-amber-400">
+                  {latestReading ? latestReading.temperatura.toFixed(1) : '--'}
+                </span>
+                <span class="text-lg font-bold text-amber-400/80">°C</span>
+              </div>
+              <div class="text-xs text-slate-500 pt-1 flex gap-3">
+                <span>Mín: <strong id="temp-min" class="text-slate-300">{stats?.temperatura_min ?? '--'}°</strong></span>
+                <span>Máx: <strong id="temp-max" class="text-slate-300">{stats?.temperatura_max ?? '--'}°</strong></span>
+              </div>
             </div>
+          </div>
 
-            <!-- Current Fan Speed -->
-            <div class="text-center px-2 flex flex-col items-center justify-center">
-              <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Ventilador</span>
-              <FanBadge speed={latestReading.velocidad_ventilador} size="md" />
+          <!-- Humedad -->
+          <div class="flex-1 rounded-3xl bg-slate-900/80 border border-slate-800/80 p-5 sm:p-6 flex items-center justify-between shadow-lg">
+            <div class="space-y-1">
+              <span class="text-xs uppercase font-semibold text-slate-400 tracking-wider">Humedad Relativa</span>
+              <div class="flex items-baseline gap-1">
+                <span id="live-hum" class="text-4xl sm:text-5xl font-black font-mono text-cyan-400">
+                  {latestReading ? latestReading.humedad.toFixed(0) : '--'}
+                </span>
+                <span class="text-lg font-bold text-cyan-400/80">%</span>
+              </div>
+              <div class="text-xs text-slate-500 pt-1 flex gap-3">
+                <span>Mín: <strong id="hum-min" class="text-slate-300">{stats?.humedad_min ?? '--'}%</strong></span>
+                <span>Máx: <strong id="hum-max" class="text-slate-300">{stats?.humedad_max ?? '--'}%</strong></span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    )}
 
-    <!-- KPI Statistics Grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-      <StatCard
-        title="Temp. Promedio"
-        value={stats ? stats.temperatura_promedio.toFixed(1) : '--'}
-        unit={stats ? '°C' : ''}
-        min={stats?.temperatura_min}
-        max={stats?.temperatura_max}
-        type="temperature"
-      />
-      <StatCard
-        title="Humedad Promedio"
-        value={stats ? stats.humedad_promedio.toFixed(1) : '--'}
-        unit={stats ? '%' : ''}
-        min={stats?.humedad_min}
-        max={stats?.humedad_max}
-        type="humidity"
-      />
-      <StatCard
-        title="Ventilador Actual"
-        value={latestReading ? latestReading.velocidad_ventilador.toUpperCase() : 'INACTIVO'}
-        type="fan"
-      />
-      <StatCard
-        title="Total de Lecturas"
-        value={totalLecturas}
-        type="count"
-      />
+      </section>
+
+      <!-- Gráfico -->
+      <section class="space-y-4">
+        <h3 class="text-base font-bold text-slate-200">Gráfico de Telemetría (1 Hora)</h3>
+        <TelemetryChart lecturas={lecturas} />
+      </section>
+
+      <!-- Tabla -->
+      <section class="space-y-3">
+        <h3 class="text-base font-bold text-slate-200">Lecturas Recientes</h3>
+        <HistoryTable lecturas={lecturas} />
+      </section>
+
+      <!-- Pie de página con bandera y dedicatoria -->
+      <footer class="mt-12 pt-6 border-t border-slate-800/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+        <div class="flex items-center gap-2.5">
+          <span>Sistema de Telemetría IoT</span>
+          <span class="text-slate-700">•</span>
+          <!-- Bandera de Ucrania minimalista -->
+          <span class="inline-flex items-center px-1.5 py-1 rounded-md bg-slate-900 border border-slate-800 shadow-sm" title="Україна">
+            <span class="w-4 h-2.5 rounded-[2px] overflow-hidden flex flex-col border border-slate-700/60">
+              <span class="h-1/2 bg-[#0057B7] w-full"></span>
+              <span class="h-1/2 bg-[#FFD700] w-full"></span>
+            </span>
+          </span>
+        </div>
+        
+        <div class="font-mono text-[11px] text-slate-400">
+          <span>З любов'ю</span>
+        </div>
+      </footer>
+
     </div>
+  </main>
 
-    <!-- Charts / Trends Section -->
-    <TelemetryChart lecturas={lecturas} />
-
-    <!-- History Table -->
-    <HistoryTable lecturas={lecturas} />
-
-    <!-- Footer -->
-    <footer class="pt-6 pb-4 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-      <div>
-        <span>Desarrollado con </span>
-        <a href="https://astro.build" target="_blank" rel="noopener noreferrer" class="text-slate-400 hover:text-cyan-400 underline decoration-slate-700">Astro SSR</a>
-        <span> y Tailwind CSS</span>
-      </div>
-      <div class="flex items-center gap-3">
-        <span>Origen de datos:</span>
-        <a 
-          href={API_URL} 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          class="font-mono text-cyan-400 hover:underline flex items-center gap-1"
-        >
-          API Historial
-          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-            <polyline points="15 3 21 3 21 9"></polyline>
-            <line x1="10" y1="14" x2="21" y2="3"></line>
-          </svg>
-        </a>
-      </div>
-    </footer>
-
-  </div>
-
-  <!-- Client-side auto-refresh script -->
   <script>
-    const checkbox = document.getElementById('auto-refresh-toggle') as HTMLInputElement | null;
-    let intervalId: any = null;
+    const API_URL = 'https://arduino-iot-ventilador-api.onrender.com/historial';
+    const btnSync = document.getElementById('btn-sync');
+    const syncIcon = document.getElementById('sync-icon');
 
-    if (checkbox) {
-      // Restore previous state if saved
-      const savedState = localStorage.getItem('auto_refresh_dashboard');
-      if (savedState === 'true') {
-        checkbox.checked = true;
-        startAutoRefresh();
-      }
+    async function actualizarDatos() {
+      if (syncIcon) syncIcon.classList.add('rotate-180');
+      try {
+        const res = await fetch(API_URL);
+        if (!res.ok) return;
+        const json = await res.json();
+        
+        if (json.lecturas && json.lecturas.length > 0) {
+          const ultima = json.lecturas[0];
+          
+          const tempEl = document.getElementById('live-temp');
+          const humEl = document.getElementById('live-hum');
+          const timeEl = document.getElementById('last-sync-time');
+          const badgeEl = document.getElementById('fan-badge');
+          const fanIcon = document.getElementById('fan-icon');
+          
+          if (tempEl) tempEl.innerText = Number(ultima.temperatura).toFixed(1);
+          if (humEl) humEl.innerText = Number(ultima.humedad).toFixed(0);
+          if (timeEl) timeEl.innerText = ultima.fecha_hora;
 
-      checkbox.addEventListener('change', () => {
-        localStorage.setItem('auto_refresh_dashboard', checkbox.checked ? 'true' : 'false');
-        if (checkbox.checked) {
-          startAutoRefresh();
-        } else {
-          stopAutoRefresh();
+          const vel = (ultima.velocidad_ventilador || 'baja').toLowerCase();
+          if (badgeEl) {
+            badgeEl.innerText = `Nivel: ${vel.toUpperCase()}`;
+            badgeEl.className = `text-xs font-bold uppercase px-3 py-1 rounded-full border ${
+              vel === 'alta' ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' :
+              vel === 'media' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
+              'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+            }`;
+          }
+
+          if (fanIcon) {
+            fanIcon.className = `w-20 h-20 text-cyan-400 animate-spin ${
+              vel === 'alta' ? '[animation-duration:1s]' :
+              vel === 'media' ? '[animation-duration:2.5s]' :
+              '[animation-duration:4.5s]'
+            }`;
+          }
+
+          if (json.estadisticas) {
+            const tMin = document.getElementById('temp-min');
+            const tMax = document.getElementById('temp-max');
+            const hMin = document.getElementById('hum-min');
+            const hMax = document.getElementById('hum-max');
+            if (tMin) tMin.innerText = `${json.estadisticas.temperatura_min}°`;
+            if (tMax) tMax.innerText = `${json.estadisticas.temperatura_max}°`;
+            if (hMin) hMin.innerText = `${json.estadisticas.humedad_min}%`;
+            if (hMax) hMax.innerText = `${json.estadisticas.humedad_max}%`;
+          }
         }
-      });
-    }
-
-    function startAutoRefresh() {
-      if (intervalId) clearInterval(intervalId);
-      intervalId = setInterval(() => {
-        window.location.reload();
-      }, 10000); // 10 seconds
-    }
-
-    function stopAutoRefresh() {
-      if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
+      } catch (e) {
+        console.warn('Reintentando...', e);
+      } finally {
+        if (syncIcon) setTimeout(() => syncIcon.classList.remove('rotate-180'), 500);
       }
     }
+
+    if (btnSync) {
+      btnSync.addEventListener('click', actualizarDatos);
+    }
+
+    setInterval(actualizarDatos, 6000);
   </script>
 </Layout>
